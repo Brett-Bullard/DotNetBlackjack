@@ -10,13 +10,15 @@ namespace CardLibrary
 
         public List<Player> players;
         private Deck deck;
-        private List<Card> dealerCards; 
+        private List<Card> DealerCards;
+        public List<Card> DealerUpCards; 
         public BlackjackGame()
         {
             deck = new CardFactory().GetDeckType(DeckType.Blackjack);
             deck.GenerateDecks(5); 
             players = new List<Player>();
-            dealerCards = new List<Card>(); 
+            DealerCards = new List<Card>();
+            DealerUpCards = new List<Card>();
         }
 
         public void AddPlayer(string name, int money)
@@ -28,7 +30,7 @@ namespace CardLibrary
         {
             get
             {
-                return this.players.Where(plr => !plr.HasBlackJack && !plr.IsBusted).ToList(); 
+                return this.players.Where(plr => plr.PlayerState == PlayerState.Hit).ToList(); 
             }
         }
 
@@ -39,67 +41,55 @@ namespace CardLibrary
 
         }
 
-        private void UpdatePlayerStatuses()
+        public void EndRound()
         {
+            while (DealerCards.CardValues()[0] < 16 || DealerCards.CardValues()[1] < 16)
+            {
+                DealerCards.Add(deck.GetCard());
+            }
+            foreach (Player player in players)
+            {
+                DealerUpCards = DealerCards;
+                if (player.IsBusted)
+                {
+                    player.LostBet();
+                    continue;
+                }
+                if (player.HasBlackJack)
+                {
+                    if (DealerCards.HasBlackJack())
+                        player.Push();
+                    else
+                        player.WonBet(2.5);
+                    continue;
+                }
+                else
+                {
+                    if (DealerCards.IsBusted())
+                        player.WonBet(2);
+                    if (player.CardsOnHand.BestBlackJackValue() > DealerCards.BestBlackJackValue())
+                        player.WonBet(2);
+                    else
+                        player.LostBet();
+
+                    continue;
+                }
+
+            }
+
+            deck.GatherCards();
+            DealerCards = new List<Card>();
+            DealerUpCards = new List<Card>();
             foreach(Player player in players)
             {
-                if (player.IsBusted || player.HasBlackJack)
-                    player.playerState = PlayerState.Stand; 
+                player.CardsOnHand = new List<Card>(); 
             }
+            players.RemoveAll(plr => plr.IsBankrupt);
         }
-
-        public void NextDeal()
-        {
-            if (players.Where(plr => plr.playerState == PlayerState.Hit).Count() > 0)
-            {
-                HitPlayers();
-                UpdatePlayerStatuses();
-            }
-
-            else
-            {
-                while (dealerCards.CardValues()[0] < 16 || dealerCards.CardValues()[1] < 16)
-                {
-                    dealerCards.Add(deck.GetCard());
-                }
-                foreach (Player player in players)
-                {
-                    if (player.IsBusted)
-                    {
-                        player.LostBet();
-                        continue;
-                    }
-                    if (player.HasBlackJack)
-                    {
-                        if (dealerCards.HasBlackJack())
-                            player.Push();
-                        else
-                            player.WonBet(2.5);
-                        continue;
-                    }
-                    else
-                    {
-                        if (dealerCards.IsBusted())
-                            player.WonBet(2);
-                        if (player.CardsOnHand.BestBlackJackValue() > dealerCards.BestBlackJackValue())
-                            player.WonBet(2);
-                        else
-                            player.LostBet();
-
-                        continue;
-                    }
-
-                }
-
-                deck.GatherCards();
-
-            }
-        }
-
 
         public void HitPlayers()
         {
-            foreach(Player player in players.Where(plr => plr.playerState == PlayerState.Hit))
+            foreach(Player player in players.Where(plr => plr.PlayerState == PlayerState.Hit))
             {
                 player.AddCard(deck.GetCard()); 
             }
@@ -114,10 +104,10 @@ namespace CardLibrary
                 {
                     player.AddCard(deck.GetCard());
                 }
-                dealerCards.Add(deck.GetCard());
+                DealerCards.Add(deck.GetCard());
             }
+            DealerUpCards.Add(DealerCards[0]); 
 
-            UpdatePlayerStatuses();
         }
     }
 }
